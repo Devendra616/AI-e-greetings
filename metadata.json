@@ -1,0 +1,7 @@
+{
+  "name": "Artisanal E-Greetings",
+  "description": "A bespoke greeting card creator designed by a senior artist with 20 years of experience, leveraging Gemini for personalized messages, images, audio, and cinematic videos.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
