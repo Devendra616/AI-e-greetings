@@ -12,50 +12,57 @@ const App: React.FC = () => {
   const [details, setDetails] = useState<GreetingDetails | null>(null);
   const [card, setCard] = useState<GeneratedCard | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [errorType, setErrorType] = useState<'auth' | 'general'>('general');
 
   const handleGenerateBase = async (formData: GreetingDetails) => {
     setDetails(formData);
-    setState(AppState.LOADING);
     setError(null);
+    setErrorType('general');
 
-    // Ensure we check for key if video is requested
+    // Proactive check for Veo models which require a paid key
     if (formData.includeVideo && (window as any).aistudio) {
-        const hasKey = await (window as any).aistudio.hasSelectedApiKey();
-        if (!hasKey) {
-            try { 
-              await (window as any).aistudio.openSelectKey(); 
-              // Proceed directly as per instructions (race condition mitigation)
-            } catch (e) {
-              console.warn("Key selection dialog issue", e);
-            }
+        try {
+          const hasKey = await (window as any).aistudio.hasSelectedApiKey();
+          if (!hasKey) {
+            await (window as any).aistudio.openSelectKey();
+          }
+        } catch (e) {
+          console.warn("Key status check failed", e);
         }
     }
+
+    setState(AppState.LOADING);
 
     try {
       const result = await generateCardData(formData);
       setCard(result);
       setState(AppState.SELECTING);
     } catch (err: any) {
-      console.error("Generation Error Details:", err);
-      
+      console.error("Creative Synthesis Error:", err);
       const errorMessage = err?.message || JSON.stringify(err);
       
-      // Determine the best user-friendly message based on typical Gemini API errors
-      if (errorMessage.includes("Requested entity was not found") || errorMessage.includes("404")) {
-        setError("Bespoke Video generation requires a Paid Google Cloud Project. Please select an API key from a project with billing enabled at ai.google.dev/gemini-api/docs/billing.");
-        // Reset key selection state by prompting again as per guidelines
-        if ((window as any).aistudio) {
-          try {
-            await (window as any).aistudio.openSelectKey();
-          } catch (e) {}
+      // Categorize errors for better user guidance
+      if (
+        errorMessage.includes("unauthorized") || 
+        errorMessage.includes("401") || 
+        errorMessage.includes("403") ||
+        errorMessage.includes("API_KEY_INVALID") ||
+        errorMessage.includes("not found")
+      ) {
+        setErrorType('auth');
+        setError("The selected API key is either invalid or does not belong to a Paid Google Cloud Project. Video generation (Veo) requires an authorized billing account.");
+        
+        // Guidelines: Prompt for key selection on auth error
+        if ((window as any).aistudio?.openSelectKey) {
+          try { await (window as any).aistudio.openSelectKey(); } catch (e) {}
         }
-      } else if (errorMessage.includes("401") || errorMessage.includes("API_KEY_INVALID") || errorMessage.includes("unauthorized")) {
-        setError("The selected API key appears to be invalid or unauthorized for this model. Please select a valid key.");
-        if ((window as any).aistudio) await (window as any).aistudio.openSelectKey();
+      } else if (errorMessage.includes("blocked by safety filters")) {
+        setError(errorMessage);
+        setErrorType('general');
       } else if (errorMessage.includes("429") || errorMessage.includes("quota")) {
-        setError("Generative studio is currently at capacity (Quota reached). Please try again in a few minutes.");
+        setError("Our creative studio is currently at maximum capacity. Please pause for a moment and try again.");
       } else {
-        setError("Our creative engine encountered an unexpected hurdle. Please try again or refine your prompt.");
+        setError("An artist's block occurred: " + (err?.message || "Internal generation failure."));
       }
       
       setState(AppState.IDLE);
@@ -73,8 +80,7 @@ const App: React.FC = () => {
       try {
         audioBase64 = await generateAudioForMessage(message);
       } catch (e: any) {
-        console.error("Audio generation failed", e);
-        // We don't fail the whole experience for audio, but we'll log it
+        console.error("Voice narration failed", e);
       }
     }
 
@@ -95,28 +101,52 @@ const App: React.FC = () => {
 
       <div className="max-w-7xl mx-auto no-print">
         {error && (
-          <div className="mb-8 p-6 bg-rose-50 border-2 border-rose-100 text-rose-700 rounded-2xl text-center font-bold shadow-lg animate-fade-in max-w-2xl mx-auto">
-            <div className="flex flex-col items-center gap-3">
-              <svg className="w-10 h-10 text-rose-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-              </svg>
-              <p>{error}</p>
-              <button 
-                onClick={handleReset}
-                className="mt-4 px-6 py-2 bg-rose-600 text-white rounded-full text-sm hover:bg-rose-700 transition"
-              >
-                Try Again
-              </button>
+          <div className="mb-8 p-10 bg-rose-50 border-2 border-rose-100 text-rose-700 rounded-[3rem] text-center shadow-2xl animate-fade-in max-w-2xl mx-auto">
+            <div className="flex flex-col items-center gap-6">
+              <div className="p-5 bg-rose-100 rounded-full">
+                <svg className="w-12 h-12 text-rose-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+              </div>
+              <h3 className="text-2xl font-serif text-stone-900">{errorType === 'auth' ? 'Authorization Required' : 'Creative Studio Error'}</h3>
+              <p className="text-sm font-medium leading-relaxed max-w-md text-stone-600">{error}</p>
+              
+              {errorType === 'auth' && (
+                <div className="mt-2 text-xs text-rose-500 border-t border-rose-200 pt-6 w-full">
+                  <p className="mb-4">Video generation requires an API key from a project with **Billing Enabled**.</p>
+                  <a 
+                    href="https://ai.google.dev/gemini-api/docs/billing" 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className="inline-block px-6 py-3 bg-white border-2 border-rose-200 rounded-full font-bold hover:bg-rose-50 transition shadow-sm text-rose-600"
+                  >
+                    Setup Gemini Billing
+                  </a>
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-4 mt-4 w-full justify-center">
+                <button 
+                  onClick={handleReset}
+                  className="px-10 py-4 bg-rose-600 text-white rounded-full text-xs hover:bg-rose-700 transition font-black uppercase tracking-widest shadow-lg active:scale-95"
+                >
+                  Return to Studio
+                </button>
+                {errorType === 'auth' && (window as any).aistudio?.openSelectKey && (
+                  <button 
+                    onClick={() => (window as any).aistudio.openSelectKey()}
+                    className="px-10 py-4 bg-stone-900 text-white rounded-full text-xs hover:bg-black transition font-black uppercase tracking-widest shadow-lg active:scale-95"
+                  >
+                    Select New API Key
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         )}
-      </div>
 
-      <div className="relative">
-        {state === AppState.IDLE && (
-          <div className="no-print">
-            <FormView onSubmit={handleGenerateBase} isGenerating={false} />
-          </div>
+        {state === AppState.IDLE && !error && (
+          <FormView onSubmit={handleGenerateBase} isGenerating={false} />
         )}
 
         {state === AppState.SELECTING && card && (
@@ -126,17 +156,14 @@ const App: React.FC = () => {
           />
         )}
 
-        {state === AppState.RESULT && card && details && card.selectedMessage && (
-          <CardView card={card} details={details} onReset={handleReset} />
+        {state === AppState.RESULT && card && details && (
+          <CardView 
+            card={card} 
+            details={details} 
+            onReset={handleReset} 
+          />
         )}
       </div>
-
-      <footer className="mt-20 text-center no-print pb-10">
-        <p className="text-rose-900/40 text-[10px] font-black tracking-[0.5em] uppercase mb-4">
-          Artisanal E-Greetings &bull; Established 2024
-        </p>
-        <div className="h-1.5 w-32 bg-gradient-to-r from-rose-500 via-orange-400 to-amber-400 mx-auto rounded-full opacity-30 shadow-lg"></div>
-      </footer>
     </div>
   );
 };

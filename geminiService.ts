@@ -31,9 +31,10 @@ export const decodeAudioData = async (
 };
 
 export const generateCardData = async (details: GreetingDetails): Promise<GeneratedCard> => {
+  // Fresh instance for text and image
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  // 1. Generate 3 Personalized Message Options in JSON
+  // 1. Generate 3 Personalized Message Options
   const textPrompt = `Generate 3 distinct, creative, and heartfelt greeting card message options for:
     Recipient: ${details.recipientName}
     Sender: ${details.senderName}
@@ -41,7 +42,6 @@ export const generateCardData = async (details: GreetingDetails): Promise<Genera
     Occasion: ${details.occasion}
     Date: ${details.date}
     Context: ${details.additionalDetails}
-    
     The messages should vary in tone: one Poetic, one Modern & Bright, one Warm & Deeply Personal.`;
 
   const textResponse = await ai.models.generateContent({
@@ -65,13 +65,16 @@ export const generateCardData = async (details: GreetingDetails): Promise<Genera
 
   let messages: string[] = ["Wishing you a wonderful day!"];
   try {
-    const json = JSON.parse(textResponse.text || "{}");
-    if (Array.isArray(json.options)) messages = json.options;
+    const responseText = textResponse.text;
+    if (responseText) {
+      const json = JSON.parse(responseText);
+      if (Array.isArray(json.options)) messages = json.options;
+    }
   } catch (e) {
     console.error("Failed to parse options", e);
   }
 
-  // 2. Generate Image - Enhanced to use user photo as subject
+  // 2. Generate Fallback/Primary Image
   let imageUrl = "";
   const base64Data = details.photoBase64 ? (details.photoBase64.split(',')[1] || details.photoBase64) : null;
   const mimeType = details.photoBase64 ? (details.photoBase64.match(/data:(.*?);/)?.[1] || 'image/jpeg') : 'image/jpeg';
@@ -110,12 +113,18 @@ export const generateCardData = async (details: GreetingDetails): Promise<Genera
     }
   }
 
-  // 3. Optional Video - Enhanced to use user photo as starting image
-  let videoUrl = undefined;
+  // 3. Optional Video - Enhanced handling for Veo specific behaviors
+  let videoUrl: string | undefined = undefined;
+
   if (details.includeVideo) {
-    const videoConfig: any = {
+    // Identity-preserving motion prompt
+    const videoPrompt = details.photoBase64
+        ? `Cinematic motion bringing the person in the provided image to life for a ${details.occasion}. Subtle, graceful movements only. Maintain facial structure exactly. Soft focus background, warm cinematic lighting.`
+        : `A breathtaking cinematic scene for a ${details.occasion}. Soft bokeh, rose and gold atmosphere, elegant slow-motion movement.`;
+
+    const videoRequest: any = {
         model: 'veo-3.1-fast-generate-preview',
-        prompt: `A cinematic 5-second video of the person in the image. High-quality animation where the subject in the ${details.occasion} scene comes to life with graceful, fluid motion and magical lighting transitions.`,
+        prompt: videoPrompt,
         config: {
             numberOfVideos: 1,
             resolution: '720p',
@@ -124,26 +133,50 @@ export const generateCardData = async (details: GreetingDetails): Promise<Genera
     };
 
     if (base64Data) {
-        videoConfig.image = {
+        videoRequest.image = {
             imageBytes: base64Data,
             mimeType: mimeType
         };
     }
 
-    let operation = await ai.models.generateVideos(videoConfig);
-    
-    // Increased polling for Veo (up to 4 minutes)
-    let attempts = 0;
-    while (!operation.done && attempts < 25) {
-        await new Promise(resolve => setTimeout(resolve, 10000)); // 10s wait
-        operation = await ai.operations.getVideosOperation({ operation });
-        attempts++;
-    }
-    
-    if (operation.response?.generatedVideos?.[0]?.video?.uri) {
-        videoUrl = `${operation.response.generatedVideos[0].video.uri}&key=${process.env.API_KEY}`;
-    } else if (!operation.done) {
-        throw new Error("Cinematic rendering is taking longer than usual. Please check back in a moment or try again.");
+    try {
+        // ALWAYS create a fresh instance before the generation call
+        const videoAiStart = new GoogleGenAI({ apiKey: process.env.API_KEY });
+        let operation = await videoAiStart.models.generateVideos(videoRequest);
+        
+        let attempts = 0;
+        // Increase limit slightly for complex image-to-video processing
+        while (!operation.done && attempts < 40) {
+            await new Promise(resolve => setTimeout(resolve, 10000));
+            // Fresh instance for polling to ensure no stale token issues
+            const videoAiPoll = new GoogleGenAI({ apiKey: process.env.API_KEY });
+            operation = await videoAiPoll.operations.getVideosOperation({ operation: operation }); 
+            
+            if (operation.error) {
+              throw new Error(`Video generation error: ${operation.error.message || 'Operation failed'}`);
+            }
+            attempts++;
+        }
+        
+        if (operation.done) {
+            const hasVideos = operation.response?.generatedVideos && operation.response.generatedVideos.length > 0;
+            const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
+
+            if (videoUri) {
+                videoUrl = `${videoUri}&key=${process.env.API_KEY}`;
+            } else if (hasVideos && !videoUri) {
+                throw new Error("Video was generated but the retrieval link is missing. This may be a temporary network issue.");
+            } else {
+                // This is the most common cause for empty results in Veo (Safety Filtering)
+                throw new Error("The cinematic video was blocked by safety filters. This often happens if a face or specific detail is flagged. Try using a different photo or changing the occasion description.");
+            }
+        } else {
+            throw new Error("Video generation is taking longer than expected. Please try again with a different image or simpler details.");
+        }
+    } catch (videoError: any) {
+        console.error("Veo Engine Failure:", videoError);
+        // Explicitly re-throw to ensure App.tsx handles the error instead of silently falling back
+        throw videoError;
     }
   }
 
