@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { GreetingDetails } from '../types';
 
 interface Props {
@@ -20,14 +20,36 @@ const FormView: React.FC<Props> = ({ onSubmit, isGenerating }) => {
   });
 
   const [preview, setPreview] = useState<string | null>(null);
+  const [hasKeySelected, setHasKeySelected] = useState<boolean | null>(null);
+
+  // Check key status on mount and when video is toggled
+  const checkKeyStatus = async () => {
+    if ((window as any).aistudio && (window as any).aistudio.hasSelectedApiKey) {
+      try {
+        const selected = await (window as any).aistudio.hasSelectedApiKey();
+        setHasKeySelected(selected);
+      } catch (e) {
+        console.error("Error checking key status:", e);
+      }
+    }
+  };
+
+  useEffect(() => {
+    checkKeyStatus();
+  }, []);
 
   const handleKeySelection = async () => {
-    if ((window as any).aistudio) {
+    if ((window as any).aistudio && (window as any).aistudio.openSelectKey) {
       try {
         await (window as any).aistudio.openSelectKey();
+        // Rule: Assume success after triggering to mitigate race condition
+        setHasKeySelected(true);
       } catch (e) {
         console.error("Failed to open key selection dialog:", e);
       }
+    } else {
+      console.warn("API Key selection dialog is not available in this environment.");
+      alert("API Key selection is managed by the platform. Please look for an external key configuration option.");
     }
   };
 
@@ -36,8 +58,8 @@ const FormView: React.FC<Props> = ({ onSubmit, isGenerating }) => {
     const isCheckbox = type === 'checkbox';
     const val = isCheckbox ? (e.target as HTMLInputElement).checked : value;
     
-    // Trigger key selection immediately when video is enabled
-    if (name === 'includeVideo' && val === true) {
+    // Trigger key selection dialog immediately when video is enabled if no key is detected
+    if (name === 'includeVideo' && val === true && !hasKeySelected) {
       handleKeySelection();
     }
 
@@ -200,22 +222,36 @@ const FormView: React.FC<Props> = ({ onSubmit, isGenerating }) => {
             {form.includeVideo && (
               <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50 border border-orange-100 rounded-2xl animate-fade-in shadow-sm">
                 <div className="flex flex-col md:flex-row items-center gap-4 text-center md:text-left">
-                  <div className="bg-white p-3 rounded-full shadow-md">
+                  <div className="bg-white p-3 rounded-full shadow-md relative">
                     <svg className="w-8 h-8 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2-2v8a2 2 0 002 2z" />
                     </svg>
+                    {hasKeySelected && (
+                        <div className="absolute -top-1 -right-1 bg-green-500 text-white rounded-full p-1 border-2 border-white">
+                            <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M5 13l4 4L19 7" />
+                            </svg>
+                        </div>
+                    )}
                   </div>
                   <div className="flex-1">
-                    <h4 className="text-orange-900 font-black text-xs uppercase tracking-widest mb-1">Premium Video Engine</h4>
+                    <h4 className="text-orange-900 font-black text-xs uppercase tracking-widest mb-1 flex items-center gap-2">
+                        Premium Video Engine
+                        {hasKeySelected && <span className="text-[10px] text-green-600 normal-case font-bold bg-green-50 px-2 py-0.5 rounded-full border border-green-100">Key Ready</span>}
+                    </h4>
                     <p className="text-stone-600 text-xs leading-relaxed mb-3">
-                      Cinematic video requires a <strong>paid</strong> API key. Your key is used securely and temporarily for this creation.
+                      High-quality cinematic video requires a <strong>Paid Google Gemini API Key</strong>. Your key will be used securely for this specific generation. 
+                      <span className="block mt-1 text-[10px] text-stone-400 italic">OpenAI keys are not supported.</span>
                     </p>
                     <button
                       type="button"
                       onClick={handleKeySelection}
-                      className="px-6 py-2 bg-stone-900 text-white rounded-full text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95"
+                      className="px-6 py-2 bg-stone-900 text-white rounded-full text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95 flex items-center gap-2 mx-auto md:mx-0"
                     >
-                      Enter My API Key
+                      <svg className="w-3 h-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                      </svg>
+                      {hasKeySelected ? 'Change My API Key' : 'Enter My API Key'}
                     </button>
                   </div>
                 </div>
