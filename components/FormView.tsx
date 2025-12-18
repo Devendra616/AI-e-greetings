@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { GreetingDetails } from '../types';
 
 interface Props {
@@ -21,18 +21,24 @@ const FormView: React.FC<Props> = ({ onSubmit, isGenerating }) => {
 
   const [preview, setPreview] = useState<string | null>(null);
 
+  const handleKeySelection = async () => {
+    if ((window as any).aistudio) {
+      try {
+        await (window as any).aistudio.openSelectKey();
+      } catch (e) {
+        console.error("Failed to open key selection dialog:", e);
+      }
+    }
+  };
+
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     const isCheckbox = type === 'checkbox';
     const val = isCheckbox ? (e.target as HTMLInputElement).checked : value;
     
-    // Handle Cinematic Video toggle: Trigger key selection dialog if enabled and no key selected
-    if (name === 'includeVideo' && val === true && (window as any).aistudio) {
-        (window as any).aistudio.hasSelectedApiKey().then((hasKey: boolean) => {
-            if (!hasKey) {
-                (window as any).aistudio.openSelectKey().catch(console.error);
-            }
-        });
+    // Trigger key selection immediately when video is enabled
+    if (name === 'includeVideo' && val === true) {
+      handleKeySelection();
     }
 
     setForm(prev => ({ ...prev, [name]: val }));
@@ -191,28 +197,26 @@ const FormView: React.FC<Props> = ({ onSubmit, isGenerating }) => {
               </label>
             </div>
 
-            {/* API Key Selection UI Toggle */}
             {form.includeVideo && (
-              <div className="p-4 bg-amber-50 border border-amber-200 rounded-xl animate-fade-in">
-                <div className="flex items-start gap-3">
-                  <svg className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-                  </svg>
-                  <div className="text-xs text-amber-800 space-y-2">
-                    <p className="font-bold">Veo Video Generation Requirement</p>
-                    <p>Cinematic video requires a <strong>Paid Google Cloud Project</strong> API key. Standard keys may not support high-quality video generation.</p>
-                    <div className="flex gap-4">
-                        <button 
-                          type="button" 
-                          onClick={() => (window as any).aistudio?.openSelectKey()}
-                          className="text-rose-600 font-black hover:underline underline-offset-4 decoration-rose-200"
-                        >
-                          Select / Change API Key
-                        </button>
-                        <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener" className="text-stone-500 hover:text-stone-800 transition">
-                            Billing Help
-                        </a>
-                    </div>
+              <div className="p-5 bg-gradient-to-br from-amber-50 to-orange-50 border border-orange-100 rounded-2xl animate-fade-in shadow-sm">
+                <div className="flex flex-col md:flex-row items-center gap-4 text-center md:text-left">
+                  <div className="bg-white p-3 rounded-full shadow-md">
+                    <svg className="w-8 h-8 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </div>
+                  <div className="flex-1">
+                    <h4 className="text-orange-900 font-black text-xs uppercase tracking-widest mb-1">Premium Video Engine</h4>
+                    <p className="text-stone-600 text-xs leading-relaxed mb-3">
+                      Cinematic video requires a <strong>paid</strong> API key. Your key is used securely and temporarily for this creation.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleKeySelection}
+                      className="px-6 py-2 bg-stone-900 text-white rounded-full text-xs font-black uppercase tracking-widest hover:bg-black transition-all shadow-lg active:scale-95"
+                    >
+                      Enter My API Key
+                    </button>
                   </div>
                 </div>
               </div>
