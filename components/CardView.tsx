@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { GeneratedCard, GreetingDetails } from '../types';
 import { decodeBase64, decodeAudioData } from '../geminiService';
+import { toPng } from 'html-to-image';
 
 interface Props {
   card: GeneratedCard;
@@ -14,7 +15,9 @@ const CardView: React.FC<Props> = ({ card, details, onReset }) => {
   const [isPlayingVideo, setIsPlayingVideo] = useState(true);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isDownloadingVideo, setIsDownloadingVideo] = useState(false);
   const videoRef = useRef<HTMLVideoElement>(null);
+  const cardContainerRef = useRef<HTMLDivElement>(null);
 
   // Helper to format YYYY-MM-DD to DD-MM-YYYY
   const formatDate = (dateStr: string) => {
@@ -72,31 +75,63 @@ const CardView: React.FC<Props> = ({ card, details, onReset }) => {
     window.print();
   };
 
-  const handleDownloadMedia = async () => {
-    setIsDownloading(true);
+  const handleDownloadVideo = async () => {
+    if (!card.videoUrl) return;
+    setIsDownloadingVideo(true);
     try {
-      if (card.videoUrl) {
-        const response = await fetch(card.videoUrl);
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `greeting-${details.recipientName}-${details.occasion}.mp4`.toLowerCase().replace(/\s+/g, '-');
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-      } else {
-        const a = document.createElement('a');
-        a.href = card.imageUrl;
-        a.download = `greeting-${details.recipientName}-${details.occasion}.png`.toLowerCase().replace(/\s+/g, '-');
-        document.body.appendChild(a);
-        a.click();
-        document.body.removeChild(a);
-      }
+      const response = await fetch(card.videoUrl);
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `cinematic-greeting-${details.recipientName}.mp4`.toLowerCase().replace(/\s+/g, '-');
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
     } catch (error) {
-      console.error("Download failed:", error);
-      alert("Download interrupted. Please check your connection and try again.");
+      console.error("Video download failed:", error);
+      alert("Video download interrupted.");
+    } finally {
+      setIsDownloadingVideo(false);
+    }
+  };
+
+  const handleDownloadFullCardPng = async () => {
+    if (!cardContainerRef.current) return;
+    setIsDownloading(true);
+    
+    // If it's a video card, we warn that PNG is a static snapshot
+    if (card.videoUrl) {
+       const proceed = confirm("This cinematic card will be saved as a static high-resolution artwork (PNG). To save the animation, use 'Download Masterpiece (MP4)'. Proceed?");
+       if (!proceed) {
+         setIsDownloading(false);
+         return;
+       }
+    }
+
+    try {
+      // Capture the card while momentarily flattening the 3D transform for a clean front-facing image
+      const dataUrl = await toPng(cardContainerRef.current, {
+        cacheBust: true,
+        pixelRatio: 2, // Higher quality
+        style: {
+          transform: 'none',
+          borderRadius: '0',
+          boxShadow: 'none',
+          border: 'none'
+        }
+      });
+      
+      const a = document.createElement('a');
+      a.href = dataUrl;
+      a.download = `artisanal-greeting-${details.recipientName}.png`.toLowerCase().replace(/\s+/g, '-');
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+    } catch (error) {
+      console.error("PNG capture failed:", error);
+      alert("Failed to capture the full card. Please try again.");
     } finally {
       setIsDownloading(false);
     }
@@ -130,6 +165,7 @@ const CardView: React.FC<Props> = ({ card, details, onReset }) => {
     <div className="max-w-6xl mx-auto p-4 md:p-12 animate-fade-in printable-card-container overflow-visible">
       <div className="relative group perspective-2500 no-print">
         <div 
+          ref={cardContainerRef}
           className="bg-white rounded-[3rem] shadow-[0_50px_100px_-20px_rgba(244,63,94,0.3)] overflow-hidden border-[12px] border-white flex flex-col md:flex-row min-h-[700px] transition-all duration-700 ease-out"
           style={{ 
             transform: 'rotateY(-8deg) rotateX(2deg) translateZ(0)',
@@ -137,7 +173,7 @@ const CardView: React.FC<Props> = ({ card, details, onReset }) => {
           }}
         >
           {/* Visual Panel (Left) */}
-          <div className="w-full md:w-1/2 relative bg-rose-50 group/video">
+          <div className="w-full md:w-1/2 relative bg-rose-50 group/video overflow-hidden">
             {card.videoUrl ? (
               <div className="w-full h-full relative overflow-hidden">
                 <video 
@@ -153,7 +189,7 @@ const CardView: React.FC<Props> = ({ card, details, onReset }) => {
                 />
                 
                 {/* Video Controls Overlay */}
-                <div className="absolute top-6 left-6 flex gap-2 opacity-0 group-hover/video:opacity-100 transition-opacity duration-300">
+                <div className="absolute top-6 left-6 flex gap-2 opacity-0 group-hover/video:opacity-100 transition-opacity duration-300 z-20">
                   <button 
                     onClick={toggleVideo}
                     className="p-3 bg-white/20 backdrop-blur-md rounded-full text-white hover:bg-white/40 transition-colors"
@@ -176,7 +212,7 @@ const CardView: React.FC<Props> = ({ card, details, onReset }) => {
               <img src={card.imageUrl} alt="Greeting Art" className="w-full h-full object-cover" />
             )}
             
-            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-12 pointer-events-none">
+            <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent flex items-end p-12 pointer-events-none z-10">
               <div className="text-white">
                 <p className="text-xs font-black uppercase tracking-[0.4em] mb-3 text-rose-400 opacity-90">{details.occasion}</p>
                 <h2 className="text-5xl font-serif border-l-8 border-rose-500 pl-6 drop-shadow-2xl">
@@ -187,7 +223,7 @@ const CardView: React.FC<Props> = ({ card, details, onReset }) => {
           </div>
 
           {/* Text Panel (Right) */}
-          <div className="w-full md:w-1/2 p-10 md:p-16 flex flex-col justify-between bg-white relative">
+          <div className="w-full md:w-1/2 p-10 md:p-16 flex flex-col justify-between bg-white relative overflow-hidden">
             <div className="absolute top-10 right-10 opacity-[0.04] pointer-events-none">
                <svg className="w-72 h-72 text-rose-900" fill="currentColor" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
             </div>
@@ -259,18 +295,35 @@ const CardView: React.FC<Props> = ({ card, details, onReset }) => {
           Export as PDF
         </button>
         
-        <button
-          onClick={handleDownloadMedia}
-          disabled={isDownloading}
-          className="px-12 py-5 bg-gradient-to-r from-rose-600 to-orange-600 text-white rounded-full hover:shadow-2xl hover:scale-105 transition-all font-black uppercase tracking-widest text-[10px] disabled:opacity-50 flex items-center gap-3 shadow-xl shadow-rose-100"
-        >
-          {isDownloading ? (
-            <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-          ) : (
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+        <div className="flex flex-col sm:flex-row gap-4">
+          <button
+            onClick={handleDownloadFullCardPng}
+            disabled={isDownloading}
+            className="px-12 py-5 bg-white border-2 border-rose-500 text-rose-600 rounded-full hover:bg-rose-50 transition-all font-black uppercase tracking-widest text-[10px] disabled:opacity-50 flex items-center gap-3 shadow-lg"
+          >
+            {isDownloading ? (
+              <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+            )}
+            Download Artwork (PNG)
+          </button>
+
+          {card.videoUrl && (
+            <button
+              onClick={handleDownloadVideo}
+              disabled={isDownloadingVideo}
+              className="px-12 py-5 bg-gradient-to-r from-rose-600 to-orange-600 text-white rounded-full hover:shadow-2xl hover:scale-105 transition-all font-black uppercase tracking-widest text-[10px] disabled:opacity-50 flex items-center gap-3 shadow-xl shadow-rose-100"
+            >
+              {isDownloadingVideo ? (
+                <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z" /></svg>
+              )}
+              Download Masterpiece (MP4)
+            </button>
           )}
-          Download {card.videoUrl ? 'Masterpiece (MP4)' : 'Artwork (PNG)'}
-        </button>
+        </div>
 
         <button
           onClick={onReset}
