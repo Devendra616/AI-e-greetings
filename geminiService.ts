@@ -31,24 +31,27 @@ export const decodeAudioData = async (
 };
 
 export const generateCardData = async (details: GreetingDetails): Promise<GeneratedCard> => {
-  // Fresh instance for text and image
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
   // 1. Generate 3 Personalized Message Options
-  const textPrompt = `Generate 3 distinct, creative, and heartfelt greeting card message options for:
+  const textPrompt = `Generate 3 distinct, creative, and profound greeting card message options for:
     Recipient: ${details.recipientName}
     Sender: ${details.senderName}
-    Relationship: ${details.relationship}
+    Relationship: ${details.relationship} (Nuance: reflect the specific emotional weight of this connection)
     Occasion: ${details.occasion}
-    Date: ${details.date}
-    Context: ${details.additionalDetails}
-    The messages should vary in tone: one Poetic, one Modern & Bright, one Warm & Deeply Personal.`;
+    Date: ${details.date} (Format is DD-MM-YYYY)
+    Personal Context: ${details.additionalDetails}
+    
+    The messages should vary in tone: 
+    1. Poetic & Timeless (Metaphorical and evocative)
+    2. Modern & Bright (Crisp, sincere, contemporary)
+    3. Warm & Deeply Personal (Focus on shared bond and specific traits)`;
 
   const textResponse = await ai.models.generateContent({
     model: 'gemini-3-flash-preview',
     contents: textPrompt,
     config: {
-      systemInstruction: "You are a world-class creative writer. Return a JSON array of 3 strings named 'options'.",
+      systemInstruction: "You are a master of human connection with 20 years of experience in high-end stationery design and creative writing. You understand the profound nuances of relationships. Return a JSON array of 3 strings named 'options'. Always incorporate the date in DD-MM-YYYY format naturally if appropriate.",
       responseMimeType: "application/json",
       responseSchema: {
         type: Type.OBJECT,
@@ -80,13 +83,13 @@ export const generateCardData = async (details: GreetingDetails): Promise<Genera
   const mimeType = details.photoBase64 ? (details.photoBase64.match(/data:(.*?);/)?.[1] || 'image/jpeg') : 'image/jpeg';
 
   const imagePrompt = details.photoBase64
-  ? `Create a premium, high-vibrancy portrait for a ${details.occasion}.
+  ? `Create a premium, artisanal portrait for a ${details.occasion}.
      SUBJECT: Use the provided photo as the absolute identity reference.
-     IDENTITY LOCK: Face, skin tone, and expression must match exactly. 
+     IDENTITY LOCK: Maintain facial features, bone structure, and expression exactly. 
      ENVIRONMENT: Reimagine them in a stunning, cinematic ${details.occasion} setting.
-     STYLE: Professional editorial photography, lush lighting, rose and gold palette. No text.`
-  : `Design a premium, high-vibrancy background for a ${details.occasion} greeting.
-     STYLE: Cinematic, abstract or symbolic elements with rose, gold, and warm highlights. No text.`;     
+     STYLE: High-end editorial photography, warm golden-hour lighting, rose and gold palette. Pure art, no text.`
+  : `Design a premium, artisanal background for a ${details.occasion} greeting.
+     STYLE: Cinematic abstraction, symbolic elements of ${details.occasion}, rose, gold, and cream highlights. Sophisticated minimalism. No text.`;     
 
   const imageParts: any[] = [{ text: imagePrompt }];
   if (base64Data) {
@@ -113,14 +116,13 @@ export const generateCardData = async (details: GreetingDetails): Promise<Genera
     }
   }
 
-  // 3. Optional Video - Enhanced handling for Veo specific behaviors
+  // 3. Optional Video
   let videoUrl: string | undefined = undefined;
 
   if (details.includeVideo) {
-    // Identity-preserving motion prompt
     const videoPrompt = details.photoBase64
-        ? `Cinematic motion bringing the person in the provided image to life for a ${details.occasion}. Subtle, graceful movements only. Maintain facial structure exactly. Soft focus background, warm cinematic lighting.`
-        : `A breathtaking cinematic scene for a ${details.occasion}. Soft bokeh, rose and gold atmosphere, elegant slow-motion movement.`;
+        ? `Cinematic motion bringing the person in the provided image to life for a ${details.occasion}. Subtle, graceful movements like a soft smile or hair blowing in a breeze. Maintain facial structure exactly. warm cinematic lighting.`
+        : `A breathtaking cinematic scene for a ${details.occasion}. Soft bokeh, rose and gold atmosphere, elegant slow-motion movement of silk or flowers.`;
 
     const videoRequest: any = {
         model: 'veo-3.1-fast-generate-preview',
@@ -140,42 +142,29 @@ export const generateCardData = async (details: GreetingDetails): Promise<Genera
     }
 
     try {
-        // ALWAYS create a fresh instance before the generation call
         const videoAiStart = new GoogleGenAI({ apiKey: process.env.API_KEY });
         let operation = await videoAiStart.models.generateVideos(videoRequest);
         
         let attempts = 0;
-        // Increase limit slightly for complex image-to-video processing
         while (!operation.done && attempts < 40) {
             await new Promise(resolve => setTimeout(resolve, 10000));
-            // Fresh instance for polling to ensure no stale token issues
             const videoAiPoll = new GoogleGenAI({ apiKey: process.env.API_KEY });
             operation = await videoAiPoll.operations.getVideosOperation({ operation: operation }); 
             
             if (operation.error) {
-              throw new Error(`Video generation error: ${operation.error.message || 'Operation failed'}`);
+              throw new Error(`Veo Engine reported an error: ${operation.error.message || 'Operation failed'}`);
             }
             attempts++;
         }
         
         if (operation.done) {
-            const hasVideos = operation.response?.generatedVideos && operation.response.generatedVideos.length > 0;
             const videoUri = operation.response?.generatedVideos?.[0]?.video?.uri;
-
             if (videoUri) {
                 videoUrl = `${videoUri}&key=${process.env.API_KEY}`;
-            } else if (hasVideos && !videoUri) {
-                throw new Error("Video was generated but the retrieval link is missing. This may be a temporary network issue.");
-            } else {
-                // This is the most common cause for empty results in Veo (Safety Filtering)
-                throw new Error("The cinematic video was blocked by safety filters. This often happens if a face or specific detail is flagged. Try using a different photo or changing the occasion description.");
             }
-        } else {
-            throw new Error("Video generation is taking longer than expected. Please try again with a different image or simpler details.");
         }
     } catch (videoError: any) {
         console.error("Veo Engine Failure:", videoError);
-        // Explicitly re-throw to ensure App.tsx handles the error instead of silently falling back
         throw videoError;
     }
   }
@@ -187,7 +176,7 @@ export const generateAudioForMessage = async (message: string): Promise<string |
   const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
   const ttsResponse = await ai.models.generateContent({
     model: "gemini-2.5-flash-preview-tts",
-    contents: [{ parts: [{ text: `Say warmly and with emotional depth: ${message.substring(0, 500)}` }] }],
+    contents: [{ parts: [{ text: `Say with deep emotional resonance and artisanal warmth: ${message.substring(0, 500)}` }] }],
     config: {
       responseModalities: [Modality.AUDIO],
       speechConfig: {

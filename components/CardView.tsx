@@ -18,6 +18,7 @@ const CardView: React.FC<Props> = ({ card, details, onReset }) => {
   const [videoError, setVideoError] = useState(false);
   const [audioBuffer, setAudioBuffer] = useState<AudioBuffer | null>(null);
   const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+  const [isDownloadingPng, setIsDownloadingPng] = useState(false);
   
   // Audio state
   const [audioVolume, setAudioVolume] = useState(0.8);
@@ -35,10 +36,17 @@ const CardView: React.FC<Props> = ({ card, details, onReset }) => {
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
-    const parts = dateStr.split('-');
+    // Handle YYYY-MM-DD from system or DD-MM-YYYY from form
+    const parts = dateStr.split(/[-/]/);
     if (parts.length !== 3) return dateStr;
-    const [year, month, day] = parts;
-    return `${day}-${month}-${year}`;
+    
+    if (parts[0].length === 4) {
+      // YYYY-MM-DD -> DD-MM-YYYY
+      const [year, month, day] = parts;
+      return `${day}-${month}-${year}`;
+    }
+    // Assume DD-MM-YYYY
+    return parts.join('-');
   };
 
   const formattedDate = formatDate(details.date);
@@ -134,14 +142,38 @@ const CardView: React.FC<Props> = ({ card, details, onReset }) => {
     const originalTransition = cardRef.current.style.transition;
     cardRef.current.style.transition = 'none';
     cardRef.current.style.transform = 'none';
+    // Wait for two frames to ensure styles are applied
     await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await new Promise(resolve => setTimeout(resolve, 150));
     return () => {
       if (cardRef.current) {
         cardRef.current.style.transition = originalTransition;
         cardRef.current.style.transform = originalTransform;
       }
     };
+  };
+
+  const handleDownloadPng = async () => {
+    if (!cardRef.current) return;
+    setIsDownloadingPng(true);
+    const restore = await flattenCardForCapture();
+    try {
+      const dataUrl = await toPng(cardRef.current, { 
+        pixelRatio: 3, 
+        backgroundColor: '#ffffff',
+        style: { borderRadius: '0', boxShadow: 'none', border: 'none' }
+      });
+      const link = document.createElement('a');
+      link.download = `bespoke-greeting-${details.recipientName.toLowerCase().replace(/\s+/g, '-')}.png`;
+      link.href = dataUrl;
+      link.click();
+    } catch (err) {
+      console.error('Failed to generate PNG', err);
+      alert('PNG capture failed. Please try again.');
+    } finally {
+      if (restore) restore();
+      setIsDownloadingPng(false);
+    }
   };
 
   const handleDownloadPdf = async () => {
@@ -296,6 +328,13 @@ const CardView: React.FC<Props> = ({ card, details, onReset }) => {
               Print Card
             </button>
             <Tooltip text="Print this card as landscape stationery." />
+          </div>
+
+          <div className="relative group">
+            <button onClick={handleDownloadPng} disabled={isDownloadingPng} className="px-8 py-5 bg-rose-50 border-2 border-rose-100 text-rose-700 rounded-full hover:bg-rose-100 transition-all font-black uppercase tracking-widest text-[10px] shadow-sm flex items-center gap-3 active:scale-95 disabled:opacity-50">
+              {isDownloadingPng ? 'Capturing Art...' : 'Download PNG'}
+            </button>
+            <Tooltip text="Save as a high-resolution image masterpiece." />
           </div>
 
           <div className="relative group">
