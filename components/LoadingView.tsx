@@ -7,6 +7,8 @@ const messages = [
   "Whispering words of warmth...",
   "Capturing the essence of your bond...",
   "Adding a touch of cinematic magic...",
+  "Our Veo engine is crafting high-fidelity motion...",
+  "Rendering your cinematic masterpiece (this may take a minute)...",
   "Almost there, finalizing the masterpiece..."
 ];
 
@@ -17,13 +19,13 @@ const LoadingView: React.FC = () => {
   useEffect(() => {
     const interval = setInterval(() => {
       setMsgIndex(prev => (prev + 1) % messages.length);
-    }, 2500);
+    }, 3500); // Slightly slower transition for more reading time
 
-    // Create some initial confetti
     const colors = ['#f43f5e', '#f97316', '#fbbf24', '#22c55e', '#3b82f6', '#a855f7'];
     const newConfetti = Array.from({ length: 30 }).map((_, i) => ({
       id: i,
       left: Math.random() * 100 + 'vw',
+      top: '-20px',
       delay: Math.random() * 5 + 's',
       duration: (Math.random() * 3 + 2) + 's',
       color: colors[Math.floor(Math.random() * colors.length)],
@@ -44,7 +46,7 @@ const LoadingView: React.FC = () => {
             className="absolute rounded-full"
             style={{
               left: c.left,
-              top: '-20px',
+              top: c.top,
               width: c.size,
               height: c.size,
               backgroundColor: c.color,
@@ -66,16 +68,18 @@ const LoadingView: React.FC = () => {
           </div>
         </div>
 
-        <div className="text-center max-w-md">
-          <h2 className="text-3xl font-serif text-stone-900 mb-4 transition-all duration-500 ease-in-out">
-            {messages[msgIndex]}
-          </h2>
+        <div className="text-center max-w-lg">
+          <div className="min-h-[80px] flex items-center justify-center">
+            <h2 className="text-3xl font-serif text-stone-900 mb-4 transition-all duration-700 ease-in-out">
+              {messages[msgIndex]}
+            </h2>
+          </div>
           <div className="flex justify-center gap-1 mb-6">
              <div className="w-2 h-2 rounded-full bg-rose-500 animate-bounce" style={{ animationDelay: '0s' }}></div>
              <div className="w-2 h-2 rounded-full bg-orange-500 animate-bounce" style={{ animationDelay: '0.1s' }}></div>
              <div className="w-2 h-2 rounded-full bg-amber-500 animate-bounce" style={{ animationDelay: '0.2s' }}></div>
           </div>
-          <p className="text-stone-500 text-sm font-medium tracking-widest uppercase">
+          <p className="text-stone-500 text-[10px] font-black tracking-[0.4em] uppercase">
             Artisanal studio in session
           </p>
         </div>
