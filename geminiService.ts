@@ -76,40 +76,14 @@ export const generateCardData = async (details: GreetingDetails): Promise<Genera
   const base64Data = details.photoBase64 ? (details.photoBase64.split(',')[1] || details.photoBase64) : null;
   const mimeType = details.photoBase64 ? (details.photoBase64.match(/data:(.*?);/)?.[1] || 'image/jpeg') : 'image/jpeg';
 
-/*   const imagePrompt = details.photoBase64 
-    ? `A high-vibrancy, artistic ${details.occasion} portrait of the EXACT person in the provided photo. 
-       IDENTITY PRESERVATION: The face and likeness MUST be 100% identical to the reference image. 
-       ENVIRONMENT: Reimagine them in a stunning, lush, cinematic world with symbolic lighting and an ethereal atmosphere. 
-       STYLE: Artisanal, professional editorial photography. Deep rose, gold, and warm amber tones. No text.`
-    : `A stunning, high-vibrancy, artistic background for a ${details.occasion} greeting card. 
-       Theme: ${details.relationship}. 
-       Style: Lush, cinematic, abstract or symbolic. Use bold colors like rose, gold, and deep teal. No text.`;
-
- */
-
   const imagePrompt = details.photoBase64
-  ? `
-Create a premium, high-vibrancy portrait for a ${details.occasion}.
-SUBJECT: Use the provided photo as the sole identity reference.
-IDENTITY LOCK: Facial features, skin tone, age, and expression must match exactly. Do not stylize or alter the face.
-POSE & FRAMING: Natural, flattering, editorial-style composition.
-ENVIRONMENT: Reimagine the subject in a cinematic, visually rich setting inspired by the occasion.
-MOOD & LIGHTING: Soft dramatic lighting, warm glow, depth, and atmosphere.
-COLOR PALETTE: Rose, gold, warm amber, and complementary tones.
-STYLE: Professional editorial photography, ultra-realistic, artistic enhancement only.
-QUALITY: Sharp focus, high detail, premium finish.
-RESTRICTIONS: No text, no logos, no distortions, no extra faces.
-`
-  : `
-Design a premium, high-vibrancy background for a ${details.occasion} greeting.
-THEME: Emotionally aligned with ${details.relationship}.
-COMPOSITION: Balanced, visually engaging, suitable for cards or social media.
-STYLE: Cinematic, abstract or symbolic elements.
-COLOR PALETTE: Rose, gold, deep teal, and warm highlights.
-MOOD: Celebratory, elegant, and timeless.
-QUALITY: High detail, smooth gradients, artistic depth.
-RESTRICTIONS: no people, no logos.
-`;     
+  ? `Create a premium, high-vibrancy portrait for a ${details.occasion}.
+     SUBJECT: Use the provided photo as the absolute identity reference.
+     IDENTITY LOCK: Face, skin tone, and expression must match exactly. 
+     ENVIRONMENT: Reimagine them in a stunning, cinematic ${details.occasion} setting.
+     STYLE: Professional editorial photography, lush lighting, rose and gold palette. No text.`
+  : `Design a premium, high-vibrancy background for a ${details.occasion} greeting.
+     STYLE: Cinematic, abstract or symbolic elements with rose, gold, and warm highlights. No text.`;     
 
   const imageParts: any[] = [{ text: imagePrompt }];
   if (base64Data) {
@@ -141,7 +115,7 @@ RESTRICTIONS: no people, no logos.
   if (details.includeVideo) {
     const videoConfig: any = {
         model: 'veo-3.1-fast-generate-preview',
-        prompt: `Cinematic 5-second fluid motion of the person in the photo. Gently animate the subject in the ${details.occasion} scene, creating a magical, high-quality aesthetic transition with slow-motion grace.`,
+        prompt: `A cinematic 5-second video of the person in the image. High-quality animation where the subject in the ${details.occasion} scene comes to life with graceful, fluid motion and magical lighting transitions.`,
         config: {
             numberOfVideos: 1,
             resolution: '720p',
@@ -158,9 +132,10 @@ RESTRICTIONS: no people, no logos.
 
     let operation = await ai.models.generateVideos(videoConfig);
     
+    // Increased polling for Veo (up to 4 minutes)
     let attempts = 0;
     while (!operation.done && attempts < 25) {
-        await new Promise(resolve => setTimeout(resolve, 8000));
+        await new Promise(resolve => setTimeout(resolve, 10000)); // 10s wait
         operation = await ai.operations.getVideosOperation({ operation });
         attempts++;
     }
@@ -168,7 +143,7 @@ RESTRICTIONS: no people, no logos.
     if (operation.response?.generatedVideos?.[0]?.video?.uri) {
         videoUrl = `${operation.response.generatedVideos[0].video.uri}&key=${process.env.API_KEY}`;
     } else if (!operation.done) {
-        throw new Error("Video generation timed out. Your request is still processing on our artistic servers.");
+        throw new Error("Cinematic rendering is taking longer than usual. Please check back in a moment or try again.");
     }
   }
 
