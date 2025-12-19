@@ -8,13 +8,13 @@ interface Props {
 }
 
 const FormView: React.FC<Props> = ({ onSubmit, isGenerating }) => {
-  // Helper to get today's date in DD-MM-YYYY format
-  const getTodayFormatted = () => {
+  // Native date input requires YYYY-MM-DD
+  const getTodayForPicker = () => {
     const d = new Date();
     const day = String(d.getDate()).padStart(2, '0');
     const month = String(d.getMonth() + 1).padStart(2, '0');
     const year = d.getFullYear();
-    return `${day}-${month}-${year}`;
+    return `${year}-${month}-${day}`;
   };
 
   const [form, setForm] = useState<GreetingDetails>({
@@ -22,7 +22,7 @@ const FormView: React.FC<Props> = ({ onSubmit, isGenerating }) => {
     senderName: "",
     relationship: "",
     occasion: "",
-    date: getTodayFormatted(),
+    date: getTodayForPicker(),
     additionalDetails: "",
     includeAudio: false,
     includeVideo: false,
@@ -79,7 +79,10 @@ const FormView: React.FC<Props> = ({ onSubmit, isGenerating }) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(form);
+    // Convert YYYY-MM-DD to DD-MM-YYYY for the AI and CardView consistency
+    const [y, m, d] = form.date.split("-");
+    const formattedDate = `${d}-${m}-${y}`;
+    onSubmit({ ...form, date: formattedDate });
   };
 
   const inputClasses =
@@ -178,19 +181,25 @@ const FormView: React.FC<Props> = ({ onSubmit, isGenerating }) => {
             <label className="block text-xs font-black text-rose-800/60 uppercase tracking-widest mb-1.5 ml-1">
               Commemoration Date
             </label>
-            <input
-              required
-              type="text"
-              name="date"
-              value={form.date}
-              onChange={handleChange}
-              placeholder="DD-MM-YYYY"
-              className={inputClasses}
-            />
-            <Tooltip text="Enter as DD-MM-YYYY for bespoke typesetting." />
+            <div className="relative">
+              <input
+                required
+                type="date"
+                name="date"
+                value={form.date}
+                onChange={handleChange}
+                className={`${inputClasses} pr-12`}
+              />
+              <div className="absolute right-4 top-1/2 -translate-y-1/2 text-rose-400 pointer-events-none">
+                <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2-2v12a2 2 0 002 2z" />
+                </svg>
+              </div>
+            </div>
+            <Tooltip text="Pick the specific date for your masterpiece." />
           </div>
           <div className="hidden md:flex items-end pb-3">
-             <span className="text-[9px] text-stone-400 font-black uppercase tracking-widest italic opacity-70">Format: DD-MM-YYYY</span>
+             <span className="text-[9px] text-stone-400 font-black uppercase tracking-widest italic opacity-70">Typeset in DD-MM-YYYY</span>
           </div>
         </div>
 

@@ -36,7 +36,8 @@ const CardView: React.FC<Props> = ({ card, details, onReset }) => {
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '';
-    // Handle YYYY-MM-DD from system or DD-MM-YYYY from form
+    // Expected format from FormView is DD-MM-YYYY
+    // But we handle YYYY-MM-DD just in case of bypass
     const parts = dateStr.split(/[-/]/);
     if (parts.length !== 3) return dateStr;
     
@@ -45,7 +46,7 @@ const CardView: React.FC<Props> = ({ card, details, onReset }) => {
       const [year, month, day] = parts;
       return `${day}-${month}-${year}`;
     }
-    // Assume DD-MM-YYYY
+    // Assume it's already DD-MM-YYYY
     return parts.join('-');
   };
 

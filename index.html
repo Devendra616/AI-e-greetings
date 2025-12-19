@@ -50,6 +50,20 @@
             animation: confetti-fall 4s linear infinite;
         }
 
+        /* Hide native calendar icon but keep functionality */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            background: transparent;
+            bottom: 0;
+            color: transparent;
+            cursor: pointer;
+            height: auto;
+            left: 0;
+            position: absolute;
+            right: 0;
+            top: 0;
+            width: auto;
+        }
+
         /* Print Styles */
         @media print {
             @page {
